@@ -1,7 +1,7 @@
 return {
 	version = 1,
 	authorizedUsers = {
-		10024636222, 
+		10012888807, 
         4531393148, 
 	}
 }
