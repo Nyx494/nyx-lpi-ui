@@ -16,4 +16,4 @@ simple script by me and a slave ai
 ### Loadstring 
 
 ```lua
-loadstring(game:HttpGet(""))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/Nyx494/nyx-lpi-ui/refs/heads/main/main.lua"))()
