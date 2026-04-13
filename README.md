@@ -13,6 +13,8 @@ simple script by me and a slave ai
 
 - settings with bunch of hotkeys
 - home tab with user info and my info
+- auth for ver id of ui
+- id check for whitelist
 
 ### Loadstring 
 
