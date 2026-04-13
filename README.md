@@ -11,7 +11,7 @@ simple script by me and a slave ai
 
 ## Features
 
-- nothing right now
+- settings with bunch of hotkeys 
 
 ### Loadstring 
 
