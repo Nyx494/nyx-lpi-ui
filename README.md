@@ -11,7 +11,8 @@ simple script by me and a slave ai
 
 ## Features
 
-- settings with bunch of hotkeys 
+- settings with bunch of hotkeys
+- home tab with user info and my info
 
 ### Loadstring 
 
