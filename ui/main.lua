@@ -378,26 +378,19 @@ local function addTab(name, iconId)
 	return scroll, list
 end
 
-local function setActiveTab(name)
-	for _, t in ipairs(tabs) do
-		if t.name == name then
-			activeTab = t
-		end
-		local active = t.name == name
-		t.scroll.Visible = active
-		t.btn.BackgroundColor3 = active and accent or Color3.fromRGB(12, 12, 19)
-		t.lbl.TextColor3 = active and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(160, 160, 175)
-		t.icon.ImageColor3 = active and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(160, 160, 175)
-	end
-end
 
 local function setActiveTab(name)
 	for _, t in ipairs(tabs) do
-		local active = t.name == name
+		local active = (t.name == name)
+		
 		t.scroll.Visible = active
 		t.btn.BackgroundColor3 = active and accent or Color3.fromRGB(12, 12, 19)
 		t.lbl.TextColor3 = active and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(160, 160, 175)
 		t.icon.ImageColor3 = active and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(160, 160, 175)
+
+		if active then
+			activeTab = t
+		end
 	end
 end
 
