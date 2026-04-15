@@ -5,6 +5,18 @@ local RunService = game:GetService("RunService")
 local Mouse = Players.LocalPlayer:GetMouse()
 local player = Players.LocalPlayer
 
+local ver = 1
+local url = "https://raw.githubusercontent.com/Nyx494/nyx-lpi-ui/refs/heads/main/auth.lua"
+local ok, data = pcall(function() return loadstring(game:HttpGet(url))() end)
+if not ok or not data then warn("Auth failed") return end
+if data.version > ver then warn("Script outdated") return end
+
+local authorized = false
+for _, id in ipairs(data.authorizedUsers or {}) do
+	if id == player.UserId then authorized = true break end
+end
+if not authorized then warn("Not authorized") return end
+
 local settingsFile = "nyx_lpiscript.json"
 local minimizeKey = Enum.KeyCode.P
 local hideKey = Enum.KeyCode.H
@@ -33,9 +45,6 @@ local function saveSettings()
 	writefile(settingsFile, game:GetService("HttpService"):JSONEncode(d))
 end
 
-
-
-local activeTab = nil
 local minimized = false
 local hidden = false
 local dragging = false
@@ -47,7 +56,6 @@ local ignoreNext = {}
 local originalTransparencies = {}
 local strokes = {}
 local accent = Color3.fromRGB(65, 105, 195)
-local openDropdown = nil
 
 local function tween(obj, props, t, style, dir)
 	TweenService:Create(obj, TweenInfo.new(t, style or Enum.EasingStyle.Quint, dir or Enum.EasingDirection.Out), props):Play()
@@ -90,15 +98,6 @@ top.BorderSizePixel = 0
 top.ZIndex = 2
 top.Parent = main
 corner(top, 8)
-
-local topCornerOverride = Instance.new("Frame")
-topCornerOverride.Size = UDim2.new(1, 0, 0, 8)
-topCornerOverride.Position = UDim2.new(0, 0, 1, -8)
-topCornerOverride.BackgroundColor3 = Color3.fromRGB(9, 9, 14)
-topCornerOverride.BorderSizePixel = 0
-topCornerOverride.ZIndex = 2
-topCornerOverride.Parent = top
-topCornerOverride.Visible = not minimized
 
 local topFill = Instance.new("Frame")
 topFill.Size = UDim2.new(1, 0, 0, 8)
@@ -213,89 +212,6 @@ contentFillLeft.Parent = content
 
 local tabs = {}
 
-local function animateTabIn(scroll)
-	local items = {}
-	for _, child in ipairs(scroll:GetChildren()) do
-		if child:IsA("GuiObject") and child.ClassName ~= "UIListLayout" and child.ClassName ~= "UIPadding" then
-			table.insert(items, child)
-		end
-	end
-	table.sort(items, function(a, b) return (a.LayoutOrder or 0) < (b.LayoutOrder or 0) end)
-
-	for i, item in ipairs(items) do
-		local orig = originalTransparencies[item] or { bg = item.BackgroundTransparency }
-		local origPos = item.Position
-
-		item.Position = UDim2.new(origPos.X.Scale, origPos.X.Offset, origPos.Y.Scale, origPos.Y.Offset + 14)
-		item.BackgroundTransparency = 1
-
-		if item:IsA("TextLabel") or item:IsA("TextButton") or item:IsA("TextBox") then
-			item.TextTransparency = 1
-		end
-		if item:IsA("ImageLabel") or item:IsA("ImageButton") then
-			item.ImageTransparency = 1
-		end
-		if strokes[item] then
-			strokes[item].Transparency = 1
-		end
-
-		for _, desc in ipairs(item:GetDescendants()) do
-			if desc:IsA("GuiObject") then
-				local dOrig = originalTransparencies[desc] or { bg = desc.BackgroundTransparency }
-
-				desc.BackgroundTransparency = 1
-
-				if desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("TextBox") then
-					desc.TextTransparency = 1
-				end
-				if desc:IsA("ImageLabel") or desc:IsA("ImageButton") then
-					desc.ImageTransparency = 1
-				end
-				if strokes[desc] then
-					strokes[desc].Transparency = 1
-				end
-			end
-		end
-
-		task.delay(i * 0.035, function()
-			if not item or not item.Parent then return end
-
-			tween(item, {
-				Position = origPos,
-				BackgroundTransparency = orig.bg or 0
-			}, 0.28, Enum.EasingStyle.Quint)
-
-			if item:IsA("TextLabel") or item:IsA("TextButton") or item:IsA("TextBox") then
-				tween(item, { TextTransparency = orig.text or 0 }, 0.28)
-			end
-			if item:IsA("ImageLabel") or item:IsA("ImageButton") then
-				tween(item, { ImageTransparency = 0 }, 0.28)
-			end
-			if strokes[item] then
-				tween(strokes[item], { Transparency = 0 }, 0.28)
-			end
-
-			for _, desc in ipairs(item:GetDescendants()) do
-				if desc:IsA("GuiObject") then
-					local dOrig = originalTransparencies[desc] or { bg = desc.BackgroundTransparency }
-
-					tween(desc, { BackgroundTransparency = dOrig.bg or 0 }, 0.28)
-
-					if desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("TextBox") then
-						tween(desc, { TextTransparency = dOrig.text or 0 }, 0.28)
-					end
-					if desc:IsA("ImageLabel") or desc:IsA("ImageButton") then
-						tween(desc, { ImageTransparency = 0 }, 0.28)
-					end
-					if strokes[desc] then
-						tween(strokes[desc], { Transparency = 0 }, 0.28)
-					end
-				end
-			end
-		end)
-	end
-end
-
 local function addTab(name, iconId)
 	local btn = Instance.new("ImageButton")
 	btn.Size = UDim2.new(1, 0, 0, 40)
@@ -341,56 +257,42 @@ local function addTab(name, iconId)
 	list.FillDirection = Enum.FillDirection.Vertical
 	list.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	list.VerticalAlignment = Enum.VerticalAlignment.Top
-	list.Padding = UDim.new(0, 6)
+	list.Padding = UDim.new(0, 4)
 	list.Parent = scroll
 
 	local innerPad = Instance.new("UIPadding")
-	innerPad.PaddingTop = UDim.new(0, 12)
-	innerPad.PaddingLeft = UDim.new(0, 12)
-	innerPad.PaddingRight = UDim.new(0, 12)
-	innerPad.PaddingBottom = UDim.new(0, 12)
+	innerPad.PaddingTop    = UDim.new(0, 10)
+	innerPad.PaddingLeft   = UDim.new(0, 10)
+	innerPad.PaddingRight  = UDim.new(0, 10)
+	innerPad.PaddingBottom = UDim.new(0, 10)
 	innerPad.Parent = scroll
 
 	local tab = { name = name, scroll = scroll, btn = btn, icon = icon, lbl = lbl }
 	table.insert(tabs, tab)
 
 	btn.MouseButton1Click:Connect(function()
-		if activeTab == tab then return end
-		activeTab = tab
-
 		for _, t in ipairs(tabs) do
 			t.scroll.Visible = false
 			t.btn.BackgroundColor3 = Color3.fromRGB(12, 12, 19)
 			t.lbl.TextColor3 = Color3.fromRGB(160, 160, 175)
 			t.icon.ImageColor3 = Color3.fromRGB(160, 160, 175)
 		end
-
 		scroll.Visible = true
 		btn.BackgroundColor3 = accent
 		lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
 		icon.ImageColor3 = Color3.fromRGB(255, 255, 255)
-
-		task.defer(function()
-			animateTabIn(scroll)
-		end)
 	end)
 
 	return scroll, list
 end
 
-
 local function setActiveTab(name)
 	for _, t in ipairs(tabs) do
-		local active = (t.name == name)
-		
+		local active = t.name == name
 		t.scroll.Visible = active
 		t.btn.BackgroundColor3 = active and accent or Color3.fromRGB(12, 12, 19)
 		t.lbl.TextColor3 = active and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(160, 160, 175)
 		t.icon.ImageColor3 = active and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(160, 160, 175)
-
-		if active then
-			activeTab = t
-		end
 	end
 end
 
@@ -449,7 +351,7 @@ end
 local function addToggle(parent, layoutOrder, labelText, default, callback)
 	local state = default == true
 	local row = Instance.new("Frame")
-	row.Size = UDim2.new(1, 0, 0, 38)
+	row.Size = UDim2.new(1, 0, 0, 36)
 	row.BackgroundColor3 = Color3.fromRGB(11, 11, 17)
 	row.BorderSizePixel = 0
 	row.LayoutOrder = layoutOrder or 0
@@ -505,7 +407,7 @@ end
 
 local function addButton(parent, layoutOrder, labelText, callback)
 	local row = Instance.new("Frame")
-	row.Size = UDim2.new(1, 0, 0, 38)
+	row.Size = UDim2.new(1, 0, 0, 36)
 	row.BackgroundColor3 = Color3.fromRGB(11, 11, 17)
 	row.BorderSizePixel = 0
 	row.LayoutOrder = layoutOrder or 0
@@ -546,42 +448,31 @@ local function addButton(parent, layoutOrder, labelText, callback)
 	hitBtn.AutoButtonColor = false
 	hitBtn.Parent = row
 	hitBtn.MouseButton1Click:Connect(function()
+		
 		if callback then callback() end
 	end)
 	return row
 end
 
 local function addInput(parent, layoutOrder, labelText, placeholder, callback)
-	local row = Instance.new("Frame")
-	row.Size = UDim2.new(1, 0, 0, 38)
-	row.BackgroundColor3 = Color3.fromRGB(11, 11, 17)
-	row.BorderSizePixel = 0
-	row.LayoutOrder = layoutOrder or 0
-	row.Parent = parent
-	corner(row, 6)
-
-	local stroke = Instance.new("UIStroke")
-	stroke.Thickness = 1
-	stroke.Color = Color3.fromRGB(30, 30, 40)
-	stroke.Parent = row
-	strokes[row] = stroke
-
+	local wrap = Instance.new("Frame")
+	wrap.Size = UDim2.new(1, 0, 0, 54)
+	wrap.BackgroundTransparency = 1
+	wrap.LayoutOrder = layoutOrder or 0
+	wrap.Parent = parent
 	local lbl = Instance.new("TextLabel")
 	lbl.Text = labelText or ""
-	lbl.Size = UDim2.new(0.45, -12, 1, 0)
-	lbl.Position = UDim2.new(0, 12, 0, 0)
+	lbl.Size = UDim2.new(1, 0, 0, 16)
 	lbl.BackgroundTransparency = 1
-	lbl.TextColor3 = Color3.fromRGB(180, 180, 200)
-	lbl.TextSize = 12
+	lbl.TextColor3 = Color3.fromRGB(120, 120, 142)
+	lbl.TextSize = 11
 	lbl.Font = Enum.Font.Arial
 	lbl.TextXAlignment = Enum.TextXAlignment.Left
 	lbl.TextStrokeTransparency = 1
-	lbl.TextTruncate = Enum.TextTruncate.AtEnd
-	lbl.Parent = row
-
+	lbl.Parent = wrap
 	local box = Instance.new("TextBox")
-	box.Size = UDim2.new(0.55, -12, 0, 24)
-	box.Position = UDim2.new(0.45, 0, 0.5, -12)
+	box.Size = UDim2.new(1, 0, 0, 32)
+	box.Position = UDim2.new(0, 0, 0, 18)
 	box.BackgroundColor3 = Color3.fromRGB(19, 19, 28)
 	box.BorderSizePixel = 0
 	box.TextColor3 = Color3.fromRGB(218, 218, 232)
@@ -592,30 +483,18 @@ local function addInput(parent, layoutOrder, labelText, placeholder, callback)
 	box.TextXAlignment = Enum.TextXAlignment.Left
 	box.ClearTextOnFocus = false
 	box.TextStrokeTransparency = 1
-	box.Parent = row
-	corner(box, 5)
-	pad(box, 0, 8, 0, 8)
+	box.Parent = wrap
+	corner(box, 6)
+	pad(box, 0, 10, 0, 10)
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 1
+	stroke.Color = Color3.fromRGB(30, 30, 42)
+	stroke.Parent = box
 
-	local boxStroke = Instance.new("UIStroke")
-	boxStroke.Thickness = 1
-	boxStroke.Color = Color3.fromRGB(35, 35, 48)
-	boxStroke.Parent = box
-
-	box.Focused:Connect(function()
-		
-		tween(box, { Size = UDim2.new(0.65, -12, 0, 24) }, 0.15)
-		tween(box, { Position = UDim2.new(0.35, 0, 0.5, -12) }, 0.15)
-		tween(lbl, { Size = UDim2.new(0.33, -12, 1, 0) }, 0.15)
-	end)
 	box.FocusLost:Connect(function(enter)
-		
-		tween(box, { Size = UDim2.new(0.55, -12, 0, 24) }, 0.15)
-		tween(box, { Position = UDim2.new(0.45, 0, 0.5, -12) }, 0.15)
-		tween(lbl, { Size = UDim2.new(0.45, -12, 1, 0) }, 0.15)
 		if callback then callback(box.Text, enter) end
 	end)
-
-	return row, box
+	return wrap, box
 end
 
 local function addSlider(parent, layoutOrder, labelText, minVal, maxVal, default, callback)
@@ -624,368 +503,109 @@ local function addSlider(parent, layoutOrder, labelText, minVal, maxVal, default
 	default = math.clamp(default or minVal, minVal, maxVal)
 	local value = default
 	local draggingSlider = false
-	local visualT = (value - minVal) / (maxVal - minVal)
-	local targetT  = visualT
-
-	local row = Instance.new("Frame")
-	row.Size = UDim2.new(1, 0, 0, 38)
-	row.BackgroundColor3 = Color3.fromRGB(11, 11, 17)
-	row.BorderSizePixel = 0
-	row.LayoutOrder = layoutOrder or 0
-	row.Parent = parent
-	corner(row, 6)
-
-	local stroke = Instance.new("UIStroke")
-	stroke.Thickness = 1
-	stroke.Color = Color3.fromRGB(30, 30, 40)
-	stroke.Parent = row
-	strokes[row] = stroke
-
+	local wrap = Instance.new("Frame")
+	wrap.Size = UDim2.new(1, 0, 0, 50)
+	wrap.BackgroundTransparency = 1
+	wrap.LayoutOrder = layoutOrder or 0
+	wrap.Parent = parent
+	local header = Instance.new("Frame")
+	header.Size = UDim2.new(1, 0, 0, 16)
+	header.BackgroundTransparency = 1
+	header.Parent = wrap
 	local lbl = Instance.new("TextLabel")
 	lbl.Text = labelText or ""
-	lbl.Size = UDim2.new(0.38, -12, 1, 0)
-	lbl.Position = UDim2.new(0, 12, 0, 0)
+	lbl.Size = UDim2.new(1, -48, 1, 0)
 	lbl.BackgroundTransparency = 1
-	lbl.TextColor3 = Color3.fromRGB(180, 180, 200)
-	lbl.TextSize = 12
+	lbl.TextColor3 = Color3.fromRGB(120, 120, 142)
+	lbl.TextSize = 11
 	lbl.Font = Enum.Font.Arial
 	lbl.TextXAlignment = Enum.TextXAlignment.Left
 	lbl.TextStrokeTransparency = 1
-	lbl.TextTruncate = Enum.TextTruncate.AtEnd
-	lbl.Parent = row
-
+	lbl.Parent = header
 	local valLbl = Instance.new("TextLabel")
 	valLbl.Text = tostring(math.round(value))
-	valLbl.Size = UDim2.new(0, 32, 1, 0)
-	valLbl.Position = UDim2.new(1, -52, 0, 0)
+	valLbl.Size = UDim2.new(0, 44, 1, 0)
+	valLbl.Position = UDim2.new(1, -44, 0, 0)
 	valLbl.BackgroundTransparency = 1
-	valLbl.TextColor3 = Color3.fromRGB(110, 110, 125)
+	valLbl.TextColor3 = Color3.fromRGB(95, 125, 215)
 	valLbl.TextSize = 11
 	valLbl.Font = Enum.Font.Arial
 	valLbl.TextXAlignment = Enum.TextXAlignment.Right
 	valLbl.TextStrokeTransparency = 1
-	valLbl.Parent = row
-
+	valLbl.Parent = header
 	local track = Instance.new("Frame")
-	track.Size = UDim2.new(0.58, -44, 0, 12)
-	track.Position = UDim2.new(0.38, 0, 0.5, -6)
+	track.Size = UDim2.new(1, 0, 0, 6)
+	track.Position = UDim2.new(0, 0, 0, 24)
 	track.BackgroundColor3 = Color3.fromRGB(30, 30, 42)
 	track.BorderSizePixel = 0
-	track.Parent = row
-	corner(track, 6)
-
+	track.Parent = wrap
+	corner(track, 3)
 	local fill = Instance.new("Frame")
-	fill.Size = UDim2.new(visualT, 0, 1, 0)
+	fill.Size = UDim2.new((value - minVal) / (maxVal - minVal), 0, 1, 0)
 	fill.BackgroundColor3 = accent
 	fill.BorderSizePixel = 0
 	fill.Parent = track
-	corner(fill, 6)
+	corner(fill, 3)
 
 	local hitbox = Instance.new("TextButton")
 	hitbox.Text = ""
-	hitbox.Size = UDim2.new(1, 0, 0, 28)
-	hitbox.Position = UDim2.new(0, 0, 0.5, -14)
+	hitbox.Size = UDim2.new(1, 0, 0, 20)
+	hitbox.Position = UDim2.new(0, 0, 0.5, -10)
 	hitbox.BackgroundTransparency = 1
 	hitbox.ZIndex = 4
 	hitbox.AutoButtonColor = false
 	hitbox.Parent = track
-
 	local function applyValue(absX)
 		local abs = track.AbsolutePosition
 		local sz  = track.AbsoluteSize
 		local t   = math.clamp((absX - abs.X) / sz.X, 0, 1)
-		targetT = t
 		value = math.round(minVal + t * (maxVal - minVal))
+		fill.Size = UDim2.new(t, 0, 1, 0)
+		thumb.Position = UDim2.new(t, 0, 0.5, 0)
 		valLbl.Text = tostring(value)
 		if callback then callback(value) end
 	end
-
 	hitbox.MouseButton1Down:Connect(function()
 		draggingSlider = true
-		tween(track, { Size = UDim2.new(0.58, -44, 0, 16) }, 0.12)
-		tween(track, { Position = UDim2.new(0.38, 0, 0.5, -8) }, 0.12)
 		applyValue(Mouse.X)
 	end)
-
 	UserInputService.InputChanged:Connect(function(input)
 		if draggingSlider and input.UserInputType == Enum.UserInputType.MouseMovement then
 			applyValue(Mouse.X)
 		end
 	end)
-
 	UserInputService.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 and draggingSlider then
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			draggingSlider = false
-			tween(track, { Size = UDim2.new(0.58, -44, 0, 12) }, 0.15)
-			tween(track, { Position = UDim2.new(0.38, 0, 0.5, -6) }, 0.15)
 		end
 	end)
-
-	RunService.RenderStepped:Connect(function()
-		visualT = visualT + (targetT - visualT) * 0.18
-		fill.Size = UDim2.new(visualT, 0, 1, 0)
-	end)
-
-	return row, function() return value end
-end
-
-local function addMultiDropdown(parent, layoutOrder, labelText, options, callback)
-	options = options or {}
-	local selected = {}
-	local open = false
-	local hoveringList = false
-	local hoveringBtn = false
-	local ITEM_H = 28
-	local MAX_VIS = 6
-	local LIST_H = math.min(#options + 3, MAX_VIS) * ITEM_H
-
-	local function count(t)
-		local n = 0
-		for _ in pairs(t) do n += 1 end
-		return n
-	end
-
-	local function trimText(str)
-		if #str > 23 then
-			return string.sub(str, 1, 23) .. "..."
-		end
-		return str
-	end
-
-	local function updateText(btn)
-		local t = {}
-		for k in pairs(selected) do table.insert(t, k) end
-		local txt = #t == 0 and "None" or table.concat(t, ", ")
-		btn.Text = trimText(txt)
-	end
-
-	local wrap = Instance.new("Frame")
-	wrap.Size = UDim2.new(1, 0, 0, 38)
-	wrap.BackgroundColor3 = Color3.fromRGB(11, 11, 17)
-	wrap.BorderSizePixel = 0
-	wrap.LayoutOrder = layoutOrder or 0
-	wrap.Parent = parent
-	corner(wrap, 6)
-
-	local rowLbl = Instance.new("TextLabel")
-	rowLbl.Text = labelText or ""
-	rowLbl.Size = UDim2.new(0.38, -12, 1, 0)
-	rowLbl.Position = UDim2.new(0, 12, 0, 0)
-	rowLbl.BackgroundTransparency = 1
-	rowLbl.TextColor3 = Color3.fromRGB(180, 180, 200)
-	rowLbl.TextSize = 12
-	rowLbl.Font = Enum.Font.Arial
-	rowLbl.TextXAlignment = Enum.TextXAlignment.Left
-	rowLbl.Parent = wrap
-
-	local dropBtn = Instance.new("TextButton")
-	dropBtn.Size = UDim2.new(0.58, 0, 0, 26)
-	dropBtn.Position = UDim2.new(0.42, 0, 0.5, -13)
-	dropBtn.BackgroundTransparency = 1
-	dropBtn.BorderSizePixel = 0
-	dropBtn.TextColor3 = Color3.fromRGB(218, 218, 232)
-	dropBtn.TextSize = 12
-	dropBtn.Font = Enum.Font.Arial
-	dropBtn.TextXAlignment = Enum.TextXAlignment.Left
-	dropBtn.Text = "None"
-	dropBtn.ClipsDescendants = true
-	dropBtn.ZIndex = 10
-	dropBtn.Parent = wrap
-	corner(dropBtn, 5)
-	pad(dropBtn, 0, 24, 0, 10)
-
-	local arrow = Instance.new("ImageLabel")
-	arrow.Image = "rbxassetid://13184099706"
-	arrow.Size = UDim2.new(0, 10, 0, 10)
-	arrow.Position = UDim2.new(1, 0, 0.5, -7)
-	arrow.BackgroundTransparency = 1
-	arrow.ImageColor3 = Color3.fromRGB(105, 105, 125)
-	arrow.ZIndex = 11
-	arrow.Parent = dropBtn
-
-	local listFrame = Instance.new("Frame")
-	listFrame.BackgroundColor3 = Color3.fromRGB(17, 17, 25)
-	listFrame.BorderSizePixel = 0
-	listFrame.ZIndex = 60
-	listFrame.Visible = false
-	listFrame.ClipsDescendants = true
-	listFrame.Size = UDim2.new(0, 0, 0, 0)
-	listFrame.Parent = gui
-	corner(listFrame, 5)
-
-	local listScroll = Instance.new("ScrollingFrame")
-	listScroll.Size = UDim2.new(1, 0, 1, 0)
-	listScroll.BackgroundTransparency = 1
-	listScroll.BorderSizePixel = 0
-	listScroll.ScrollBarThickness = 4
-	listScroll.CanvasSize = UDim2.new(0, 0, 0, (#options + 3) * ITEM_H)
-	listScroll.ZIndex = 62
-	listScroll.Parent = listFrame
-
-	local listLayout = Instance.new("UIListLayout")
-	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	listLayout.Parent = listScroll
-
-	local function refreshButtons(btns)
-		for _, b in ipairs(btns) do
-			b.BackgroundColor3 = selected[b.Text] and Color3.fromRGB(28, 28, 52) or Color3.fromRGB(17, 17, 25)
-		end
-	end
-
-	local function makeAction(text, fn, order)
-		local b = Instance.new("TextButton")
-		b.Size = UDim2.new(1, 0, 0, ITEM_H)
-		b.BackgroundColor3 = Color3.fromRGB(20, 20, 32)
-		b.BorderSizePixel = 0
-		b.TextColor3 = Color3.fromRGB(160, 160, 200)
-		b.TextSize = 12
-		b.Font = Enum.Font.Arial
-		b.TextXAlignment = Enum.TextXAlignment.Left
-		b.Text = text
-		b.LayoutOrder = order
-		b.ZIndex = 63
-		b.Parent = listScroll
-		pad(b, 0, 0, 0, 10)
-		b.MouseButton1Click:Connect(function()
-			fn()
-			updateText(dropBtn)
-			refreshButtons(optBtns)
-			if callback then callback(selected) end
-		end)
-	end
-
-	makeAction("Select All", function()
-		if count(selected) == #options then
-			selected = {}
-		else
-			selected = {}
-			for _, v in ipairs(options) do selected[v] = true end
-		end
-	end, 0)
-
-	makeAction("Others", function()
-		local me = player.Name
-		if count(selected) == (#options - 1) then
-			selected = {}
-		else
-			selected = {}
-			for _, v in ipairs(options) do
-				if v ~= me then selected[v] = true end
-			end
-		end
-	end, 1)
-
-	makeAction("Clear", function()
-		selected = {}
-	end, 2)
-
-	local optBtns = {}
-	for i, opt in ipairs(options) do
-		local ob = Instance.new("TextButton")
-		ob.Size = UDim2.new(1, 0, 0, ITEM_H)
-		ob.BackgroundColor3 = Color3.fromRGB(17, 17, 25)
-		ob.BorderSizePixel = 0
-		ob.TextColor3 = Color3.fromRGB(200, 200, 215)
-		ob.TextSize = 12
-		ob.Font = Enum.Font.Arial
-		ob.TextXAlignment = Enum.TextXAlignment.Left
-		ob.Text = opt
-		ob.LayoutOrder = i + 3
-		ob.ZIndex = 63
-		ob.Parent = listScroll
-		pad(ob, 0, 0, 0, 10)
-
-		ob.MouseButton1Click:Connect(function()
-			if selected[opt] then selected[opt] = nil else selected[opt] = true end
-			refreshButtons(optBtns)
-			updateText(dropBtn)
-			if callback then callback(selected) end
-		end)
-
-		table.insert(optBtns, ob)
-	end
-
-	local function closeThis()
-		open = false
-		if openDropdown == listFrame then openDropdown = nil end
-		tween(listFrame, { Size = UDim2.new(0, dropBtn.AbsoluteSize.X, 0, 0) }, 0.15)
-		task.delay(0.15, function() listFrame.Visible = false end)
-		tween(arrow, { Rotation = 0 }, 0.2)
-	end
-
-	dropBtn.MouseEnter:Connect(function() hoveringBtn = true end)
-	dropBtn.MouseLeave:Connect(function() hoveringBtn = false end)
-	listFrame.MouseEnter:Connect(function() hoveringList = true end)
-	listFrame.MouseLeave:Connect(function() hoveringList = false end)
-
-	dropBtn.MouseButton1Click:Connect(function()
-		if open then closeThis() return end
-		open = true
-		openDropdown = listFrame
-		task.defer(function()
-			local as = dropBtn.AbsoluteSize
-			local ap = dropBtn.AbsolutePosition
-			listFrame.Position = UDim2.new(0, ap.X, 0, ap.Y + as.Y - 1)
-			listFrame.Size = UDim2.new(0, as.X, 0, 0)
-			listFrame.Visible = true
-			tween(listFrame, { Size = UDim2.new(0, as.X, 0, LIST_H) }, 0.2)
-		end)
-		tween(arrow, { Rotation = 180 }, 0.2)
-	end)
-
-	RunService.RenderStepped:Connect(function()
-		if open and not hoveringList and not hoveringBtn then
-			closeThis()
-		end
-	end)
-
-	return wrap, function() return selected end
-end
-
-local function getPlayerNames()
-	local t = {}
-	for _, p in ipairs(Players:GetPlayers()) do
-		table.insert(t, p.Name)
-	end
-	return t
+	return wrap, function() return value end
 end
 
 local function addDropdown(parent, layoutOrder, labelText, options, default, callback)
 	options = options or {}
 	local selected = default or options[1] or ""
 	local open = false
-	local hoveringList = false
-	local hoveringBtn = false
-	local ITEM_H = 28
-	local MAX_VIS = 5
-	local LIST_H = math.min(#options, MAX_VIS) * ITEM_H
-
 	local wrap = Instance.new("Frame")
-	wrap.Size = UDim2.new(1, 0, 0, 38)
-	wrap.BackgroundColor3 = Color3.fromRGB(11, 11, 17)
-	wrap.BorderSizePixel = 0
+	wrap.Size = UDim2.new(1, 0, 0, 52)
+	wrap.BackgroundTransparency = 1
 	wrap.LayoutOrder = layoutOrder or 0
 	wrap.ClipsDescendants = false
 	wrap.Parent = parent
-	corner(wrap, 6)
-
-	local rowLbl = Instance.new("TextLabel")
-	rowLbl.Text = labelText or ""
-	rowLbl.Size = UDim2.new(0.38, -12, 1, 0)
-	rowLbl.Position = UDim2.new(0, 12, 0, 0)
-	rowLbl.BackgroundTransparency = 1
-	rowLbl.TextColor3 = Color3.fromRGB(180, 180, 200)
-	rowLbl.TextSize = 12
-	rowLbl.Font = Enum.Font.Arial
-	rowLbl.TextXAlignment = Enum.TextXAlignment.Left
-	rowLbl.TextStrokeTransparency = 1
-	rowLbl.TextTruncate = Enum.TextTruncate.AtEnd
-	rowLbl.Parent = wrap
-
+	local lbl = Instance.new("TextLabel")
+	lbl.Text = labelText or ""
+	lbl.Size = UDim2.new(1, 0, 0, 16)
+	lbl.BackgroundTransparency = 1
+	lbl.TextColor3 = Color3.fromRGB(120, 120, 142)
+	lbl.TextSize = 11
+	lbl.Font = Enum.Font.Arial
+	lbl.TextXAlignment = Enum.TextXAlignment.Left
+	lbl.TextStrokeTransparency = 1
+	lbl.Parent = wrap
 	local dropBtn = Instance.new("TextButton")
-	dropBtn.Size = UDim2.new(0.58, 0, 0, 26)
-	dropBtn.Position = UDim2.new(0.42, 0, 0.5, -13)
-	dropBtn.BackgroundTransparency = 1
+	dropBtn.Size = UDim2.new(1, 0, 0, 30)
+	dropBtn.Position = UDim2.new(0, 0, 0, 18)
+	dropBtn.BackgroundColor3 = Color3.fromRGB(19, 19, 28)
 	dropBtn.BorderSizePixel = 0
 	dropBtn.TextColor3 = Color3.fromRGB(218, 218, 232)
 	dropBtn.TextSize = 12
@@ -994,21 +614,28 @@ local function addDropdown(parent, layoutOrder, labelText, options, default, cal
 	dropBtn.Text = selected
 	dropBtn.TextStrokeTransparency = 1
 	dropBtn.AutoButtonColor = false
-	dropBtn.ClipsDescendants = true
+	dropBtn.ClipsDescendants = false
 	dropBtn.ZIndex = 10
 	dropBtn.Parent = wrap
-	corner(dropBtn, 5)
-	pad(dropBtn, 0, 24, 0, 10)
-
-	local arrow = Instance.new("ImageLabel")
-	arrow.Image = "rbxassetid://13184099706"
-	arrow.Size = UDim2.new(0, 10, 0, 10)
-	arrow.Position = UDim2.new(1, 0, 0.5, -7)
+	corner(dropBtn, 6)
+	pad(dropBtn, 0, 28, 0, 10)
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 1
+	stroke.Color = Color3.fromRGB(30, 30, 42)
+	stroke.Parent = dropBtn
+	local arrow = Instance.new("TextLabel")
+	arrow.Text = "▾"
+	arrow.Size = UDim2.new(0, 20, 1, 0)
+	arrow.Position = UDim2.new(1, -22, 0, 0)
 	arrow.BackgroundTransparency = 1
-	arrow.ImageColor3 = Color3.fromRGB(105, 105, 125)
+	arrow.TextColor3 = Color3.fromRGB(105, 105, 125)
+	arrow.TextSize = 12
+	arrow.Font = Enum.Font.Arial
+	arrow.TextStrokeTransparency = 1
 	arrow.ZIndex = 11
 	arrow.Parent = dropBtn
-
+	local ITEM_H = 28
+	local MAX_VIS = 5
 	local listFrame = Instance.new("Frame")
 	listFrame.BackgroundColor3 = Color3.fromRGB(17, 17, 25)
 	listFrame.BorderSizePixel = 0
@@ -1017,22 +644,25 @@ local function addDropdown(parent, layoutOrder, labelText, options, default, cal
 	listFrame.ClipsDescendants = true
 	listFrame.Size = UDim2.new(0, 0, 0, 0)
 	listFrame.Parent = gui
-	corner(listFrame, 5)
-
+	corner(listFrame, 6)
+	local listStroke = Instance.new("UIStroke")
+	listStroke.Thickness = 1
+	listStroke.Color = Color3.fromRGB(38, 38, 55)
+	listStroke.Parent = listFrame
 	local listScroll = Instance.new("ScrollingFrame")
 	listScroll.Size = UDim2.new(1, 0, 1, 0)
 	listScroll.BackgroundTransparency = 1
 	listScroll.BorderSizePixel = 0
 	listScroll.ScrollBarThickness = 0
 	listScroll.ScrollBarImageTransparency = 1
-	listScroll.CanvasSize = UDim2.new(0, 0, 0, #options * ITEM_H)
-	listScroll.ZIndex = 62
+	listScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+	listScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	listScroll.ZIndex = 61
 	listScroll.Parent = listFrame
-
 	local listLayout2 = Instance.new("UIListLayout")
 	listLayout2.SortOrder = Enum.SortOrder.LayoutOrder
+	listLayout2.Padding = UDim.new(0, 0)
 	listLayout2.Parent = listScroll
-
 	local optBtns = {}
 	for i, opt in ipairs(options) do
 		local ob = Instance.new("TextButton")
@@ -1046,11 +676,10 @@ local function addDropdown(parent, layoutOrder, labelText, options, default, cal
 		ob.Text = opt
 		ob.TextStrokeTransparency = 1
 		ob.AutoButtonColor = false
-		ob.ZIndex = 63
+		ob.ZIndex = 62
 		ob.LayoutOrder = i
 		ob.Parent = listScroll
 		pad(ob, 0, 0, 0, 10)
-
 		ob.MouseEnter:Connect(function()
 			tween(ob, { BackgroundColor3 = Color3.fromRGB(30, 30, 48) }, 0.08)
 		end)
@@ -1064,67 +693,52 @@ local function addDropdown(parent, layoutOrder, labelText, options, default, cal
 				b.BackgroundColor3 = (b.Text == selected) and Color3.fromRGB(28, 28, 52) or Color3.fromRGB(17, 17, 25)
 			end
 			open = false
-			openDropdown = nil
 			tween(listFrame, { Size = UDim2.new(0, dropBtn.AbsoluteSize.X, 0, 0) }, 0.15)
 			task.delay(0.15, function() listFrame.Visible = false end)
-			tween(arrow, { Rotation = 0 }, 0.2)
+			tween(stroke, { Color = Color3.fromRGB(30, 30, 42) }, 0.15)
 			if callback then callback(selected) end
 		end)
 		table.insert(optBtns, ob)
 	end
-
-	local function closeThis()
-		open = false
-		if openDropdown == listFrame then openDropdown = nil end
-		tween(listFrame, { Size = UDim2.new(0, dropBtn.AbsoluteSize.X, 0, 0) }, 0.15)
-		task.delay(0.15, function() listFrame.Visible = false end)
-		tween(arrow, { Rotation = 0 }, 0.2)
-	end
-
-	dropBtn.MouseEnter:Connect(function() hoveringBtn = true end)
-	dropBtn.MouseLeave:Connect(function() hoveringBtn = false end)
-	listFrame.MouseEnter:Connect(function() hoveringList = true end)
-	listFrame.MouseLeave:Connect(function() hoveringList = false end)
-
 	dropBtn.MouseButton1Click:Connect(function()
+		open = not open
 		if open then
-			closeThis()
-			return
-		end
-		if openDropdown and openDropdown ~= listFrame then
-			local prev = openDropdown
-			tween(prev, { Size = UDim2.new(0, prev.AbsoluteSize.X, 0, 0) }, 0.15)
-			task.delay(0.15, function() prev.Visible = false end)
-			openDropdown = nil
-		end
-		open = true
-		openDropdown = listFrame
-
-		task.defer(function()
 			local as = dropBtn.AbsoluteSize
 			local ap = dropBtn.AbsolutePosition
-			listFrame.Position = UDim2.new(0, ap.X, 0, ap.Y + as.Y - 1)
+			local targetH = math.min(#options, MAX_VIS) * ITEM_H
+			listFrame.Position = UDim2.new(0, ap.X, 0, ap.Y + as.Y + 2)
 			listFrame.Size = UDim2.new(0, as.X, 0, 0)
 			listFrame.Visible = true
-			tween(listFrame, { Size = UDim2.new(0, as.X, 0, LIST_H) }, 0.2)
-		end)
-
-		tween(arrow, { Rotation = 180 }, 0.2)
-	end)
-
-	RunService.RenderStepped:Connect(function()
-		if not open then return end
-		if not hoveringList and not hoveringBtn then
-			closeThis()
+			tween(listFrame, { Size = UDim2.new(0, as.X, 0, targetH) }, 0.2)
+			tween(stroke, { Color = accent }, 0.15)
+		else
+			tween(listFrame, { Size = UDim2.new(0, dropBtn.AbsoluteSize.X, 0, 0) }, 0.15)
+			task.delay(0.15, function() listFrame.Visible = false end)
+			tween(stroke, { Color = Color3.fromRGB(30, 30, 42) }, 0.15)
 		end
 	end)
-
+	UserInputService.InputBegan:Connect(function(input)
+		if not open then return end
+		if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+		local mp = UserInputService:GetMouseLocation()
+		local function inside(f)
+			local p, s = f.AbsolutePosition, f.AbsoluteSize
+			return mp.X >= p.X and mp.X <= p.X + s.X and mp.Y >= p.Y and mp.Y <= p.Y + s.Y
+		end
+		if not inside(listFrame) and not inside(dropBtn) then
+			open = false
+			tween(listFrame, { Size = UDim2.new(0, dropBtn.AbsoluteSize.X, 0, 0) }, 0.15)
+			task.delay(0.15, function() listFrame.Visible = false end)
+			tween(stroke, { Color = Color3.fromRGB(30, 30, 42) }, 0.15)
+		end
+	end)
 	return wrap, function() return selected end
 end
-local homeScroll, _ = addTab("Home", 6034798461)
+
+local homeScroll = addTab("Home", 6034798461)
 
 local profileCard = Instance.new("Frame")
-profileCard.Size = UDim2.new(1, 0, 0, 220)
+profileCard.Size = UDim2.new(1, 0, 0, 200)
 profileCard.BackgroundColor3 = Color3.fromRGB(11, 11, 17)
 profileCard.BorderSizePixel = 0
 profileCard.LayoutOrder = 1
@@ -1137,20 +751,8 @@ pfp.Position = UDim2.new(0, 18, 0, 18)
 pfp.BackgroundTransparency = 1
 pfp.Parent = profileCard
 corner(pfp, 34)
-local thumbImg = Players:GetUserThumbnailAsync(player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150)
-pfp.Image = thumbImg
-
-local welcomeLbl = Instance.new("TextLabel")
-welcomeLbl.Text = "Welcome, " .. player.DisplayName
-welcomeLbl.Size = UDim2.new(1, -28, 0, 20)
-welcomeLbl.Position = UDim2.new(0, 14, 0, -26)
-welcomeLbl.AnchorPoint = Vector2.new(0, 1)
-welcomeLbl.BackgroundTransparency = 1
-welcomeLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
-welcomeLbl.TextSize = 13
-welcomeLbl.Font = Enum.Font.Arial
-welcomeLbl.TextXAlignment = Enum.TextXAlignment.Left
-welcomeLbl.TextStrokeTransparency = 1
+local thumb = Players:GetUserThumbnailAsync(player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150)
+pfp.Image = thumb
 
 local unLbl = Instance.new("TextLabel")
 unLbl.Text = player.Name
@@ -1209,10 +811,10 @@ linksLbl.Parent = profileCard
 
 local sumLbl = Instance.new("TextLabel")
 sumLbl.Text = "test ui for nyx lpi script — placeholder text, more features soon"
-sumLbl.Size = UDim2.new(1, -28, 0, 36)
-sumLbl.Position = UDim2.new(0, 14, 0, 162)
+sumLbl.Size = UDim2.new(1, -28, 0, 32)
+sumLbl.Position = UDim2.new(0, 14, 0, 158)
 sumLbl.BackgroundTransparency = 1
-sumLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+sumLbl.TextColor3 = Color3.fromRGB(85, 85, 102)
 sumLbl.TextSize = 11
 sumLbl.Font = Enum.Font.Arial
 sumLbl.TextXAlignment = Enum.TextXAlignment.Left
@@ -1220,29 +822,12 @@ sumLbl.TextWrapped = true
 sumLbl.TextStrokeTransparency = 1
 sumLbl.Parent = profileCard
 
-local welcomeHeader = Instance.new("Frame")
-welcomeHeader.Size = UDim2.new(1, 0, 0, 28)
-welcomeHeader.BackgroundTransparency = 1
-welcomeHeader.LayoutOrder = 0
-welcomeHeader.Parent = homeScroll
 
-local welcomeHeaderLbl = Instance.new("TextLabel")
-welcomeHeaderLbl.Text = "Welcome, " .. player.DisplayName
-welcomeHeaderLbl.Size = UDim2.new(1, 0, 1, 0)
-welcomeHeaderLbl.BackgroundTransparency = 1
-welcomeHeaderLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
-welcomeHeaderLbl.TextSize = 15
-welcomeHeaderLbl.Font = Enum.Font.Arial
-welcomeHeaderLbl.TextXAlignment = Enum.TextXAlignment.Left
-welcomeHeaderLbl.TextStrokeTransparency = 1
-welcomeHeaderLbl.Parent = welcomeHeader
-
-
-local settingsScroll, _ = addTab("Settings", 7059346373)
+local settingsScroll = addTab("Settings", 7059346373)
 
 local function makeRow(parent, order)
 	local row = Instance.new("Frame")
-	row.Size = UDim2.new(1, 0, 0, 38)
+	row.Size = UDim2.new(1, 0, 0, 36)
 	row.BackgroundTransparency = 1
 	row.LayoutOrder = order
 	row.Parent = parent
@@ -1456,7 +1041,6 @@ task.defer(function()
 			originalTransparencies[v] = entry
 		end
 	end
-	task.delay(0.05, function() animateTabIn(homeScroll) end)
 end)
 
 currentPos = Vector2.new(main.AbsolutePosition.X, main.AbsolutePosition.Y)
@@ -1483,11 +1067,8 @@ local function setGuiHidden(hide)
 			local orig = originalTransparencies[v]
 			if orig then
 				tween(v, { BackgroundTransparency = hide and 1 or orig.bg }, 0.3)
-				if v:IsA("TextLabel") or v:IsA("TextButton") or v:IsA("TextBox") then
+				if v:IsA("TextLabel") or v:IsA("TextButton") then
 					tween(v, { TextTransparency = hide and 1 or (orig.text or 0) }, 0.3)
-				end
-				if v:IsA("ImageLabel") or v:IsA("ImageButton") then
-					tween(v, { ImageTransparency = hide and 1 or 0 }, 0.3)
 				end
 				if strokes[v] then tween(strokes[v], { Transparency = hide and 1 or 0 }, 0.3) end
 			end
@@ -1497,7 +1078,6 @@ end
 
 local function doMinimize()
 	minimized = not minimized
-	topCornerOverride.Visible = not minimized
 	tween(main, { Size = minimized and UDim2.new(0, 500, 0, 35) or UDim2.new(0, 500, 0, 400) }, 0.4, Enum.EasingStyle.Quint)
 end
 
@@ -1526,5 +1106,4 @@ UserInputService.InputBegan:Connect(function(input, gpe)
 	elseif input.KeyCode == recenterKey and recenterEnabled and not hidden then
 		recenterWindow()
 	end
-end) 
-
+end)
